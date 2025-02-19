@@ -69,5 +69,21 @@ class CustomLogin(models.Model):
 
     def __str__(self):
         return self.username
+    
+class CustomRegister(models.Model):
+    GENDER_CHOICES = (
+        ('M', 'Male'),
+        ('F', 'Female'),
+        ('O', 'Other'),
+    )
+    
+    username = models.CharField(max_length=150, unique=True)
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
+    email = models.EmailField(unique=True)
+    password = models.CharField(max_length=255)  # Store hashed passwords in a real app
+
+    def __str__(self):
+        return self.username
+
 
 

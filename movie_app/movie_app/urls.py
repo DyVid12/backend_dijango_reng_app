@@ -5,15 +5,14 @@ from django.urls import path, re_path
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
-from data.views import LoginAPI
+from data.views import LoginAPI,RegisterAPI
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import views as auth_views
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from data.views import movie_list, movie_detail, add_review, add_to_watchlist, watchlist, json_view,login_view 
+from data.views import movie_list, movie_detail, add_review, add_to_watchlist, watchlist, json_view
 
-
-
+# Swagger schema view
 schema_view = get_schema_view(
     openapi.Info(
         title="Rerng App API",
@@ -24,9 +23,10 @@ schema_view = get_schema_view(
         license=openapi.License(name="MIT License"),
     ),
     public=True,
-    permission_classes=(permissions.AllowAny,),
+    permission_classes=(permissions.AllowAny,),  # Allow public access to Swagger
 )
 
+# URL patterns
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('Movie_data/', json_view, name='json_view'),
@@ -35,7 +35,11 @@ urlpatterns = [
     path('movies/<int:movie_id>/review/', add_review, name='add_review'),
     path('movies/<int:movie_id>/watchlist/', add_to_watchlist, name='add_to_watchlist'),
     path('watchlist/', watchlist, name='watchlist'),
-    path("Authorization/login", LoginAPI.as_view(), name="login"),
+    path('Authorization/register', RegisterAPI.as_view(), name='register'),
+    # Custom login API
+    path('Authorization/login', LoginAPI.as_view(), name='login'),
+    
+    # Swagger UI and ReDoc
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

@@ -20,6 +20,7 @@ from rest_framework.decorators import api_view
 from drf_yasg import openapi  # This line is necessary for openapi
 from drf_yasg.utils import swagger_auto_schema
 from django.contrib.auth.models import User
+from rest_framework.permissions import AllowAny
 from django.contrib.auth.hashers import make_password
 
 # Creating a default user for testing (if you don't already have one)
@@ -162,4 +163,75 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(required=True)
 
 def login_view(request):
-    return render(request, 'movies/login.html')    
+    return render(request, 'movies/login.html') 
+
+class CustomRegisterSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    gender = serializers.ChoiceField(choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')], required=True)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
+
+swagger_security_scheme = {
+    "type": "apiKey",
+    "in": "header",
+    "name": "Authorization",
+    "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'"
+}
+
+drf_yasg_security = [swagger_security_scheme]
+
+class CustomRegisterSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    gender = serializers.ChoiceField(choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')], required=True)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
+
+class RegisterAPI(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [JSONParser]
+
+    @swagger_auto_schema(
+        operation_description="User registration endpoint",
+        security=drf_yasg_security,
+        request_body=CustomRegisterSerializer,
+        responses={
+            201: openapi.Response('Registration Successful'),
+            400: openapi.Response('Invalid Data'),
+        }
+    )
+    def post(self, request):
+        serializer = CustomRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            gender = serializer.validated_data['gender']
+            email = serializer.validated_data['email']
+            password = serializer.validated_data['password']
+            
+            if User.objects.filter(username=username).exists():
+                return Response({"error": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if User.objects.filter(email=email).exists():
+                return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = User.objects.create_user(username=username, email=email, password=password)
+            
+            # Generate JWT token
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            
+            return Response({
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "gender": gender,
+                    "role": "user"
+                },
+                "access_token": access_token
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+def register_view(request):
+    return render(request, 'movies/register.html')
+
