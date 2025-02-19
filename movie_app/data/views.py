@@ -31,9 +31,31 @@ default_user, created = User.objects.get_or_create(
 
 )
 
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from django.http import JsonResponse
+from django.db.models import Q
+from .models import Movie
+
+# Define the Swagger parameters for the search query
+search_query_param = openapi.Parameter(
+    'q', openapi.IN_QUERY,
+    description="Search for a movie by title",
+    type=openapi.TYPE_STRING
+)
+
+search_query_param = openapi.Parameter(
+    'q', openapi.IN_QUERY,
+    description="Search for a movie by title",
+    type=openapi.TYPE_STRING
+)
+
 @swagger_auto_schema(
     method='get',
     operation_description="Search movies by title",
+    manual_parameters=[search_query_param],  # Add query parameter for documentation
     responses={
         200: openapi.Response(
             description="Movies matching the search criteria",
@@ -47,7 +69,13 @@ default_user, created = User.objects.get_or_create(
                             "release_date": "2025-02-19",
                             "poster": "https://example.com/poster.jpg",
                             "rating": 8.5,
-                            "trailer_url": "https://example.com/trailer.mp4"
+                            "movie_detail": {
+                                "title": "Movie Title",
+                                "release_date": "2025-02-19",
+                                "overview": "This is a brief overview of the movie.",
+                                "poster": "https://example.com/poster.jpg",
+                                "trailer_url": "https://example.com/trailer.mp4"
+                            }
                         }
                     ]
                 }
@@ -69,7 +97,13 @@ def search_movies_by_title(request):
                 "release_date": movie.release_date.strftime("%Y-%m-%d"),
                 "poster": movie.poster.url if movie.poster else None,
                 "rating": movie.rating,
-                "trailer_url": movie.trailer_url
+                "movie_detail": {
+                    "title": movie.title,
+                    "release_date": movie.release_date.strftime("%Y-%m-%d"),
+                    "overview": movie.overview if hasattr(movie, 'overview') else "No overview available",
+                    "poster": movie.poster.url if movie.poster else None,
+                    "trailer_url": movie.trailer_url
+                }
             }
             for movie in movies
         ]
@@ -77,16 +111,6 @@ def search_movies_by_title(request):
     else:
         # If no query, return an empty list
         return JsonResponse({"status": "success", "movies": []}, safe=False)
-
-
-
-
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from django.http import JsonResponse
-
 # Assuming group_movies_by_category() is a function that returns categorized movie data
 def group_movies_by_category():
     return {
