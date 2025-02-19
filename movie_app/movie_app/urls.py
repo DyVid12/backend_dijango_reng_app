@@ -10,7 +10,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import views as auth_views
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from data.views import movie_list, movie_detail, add_review, add_to_watchlist, watchlist, json_view
+from data.views import movie_list, movie_detail, add_review, add_to_watchlist, watchlist, json_view,movies_by_category,search_movies_by_title
 
 # Swagger schema view
 schema_view = get_schema_view(
@@ -36,6 +36,8 @@ urlpatterns = [
     path('movies/<int:movie_id>/watchlist/', add_to_watchlist, name='add_to_watchlist'),
     path('watchlist/', watchlist, name='watchlist'),
     path('Authorization/register', RegisterAPI.as_view(), name='register'),
+    path('Movie_data/movies_by_category/<str:category>/', movies_by_category, name='movies_by_category'),
+    path('Movie_data/search_movies_by_title/', search_movies_by_title, name='search_movies_by_title'),
     # Custom login API
     path('Authorization/login', LoginAPI.as_view(), name='login'),
     

@@ -22,12 +22,155 @@ from drf_yasg.utils import swagger_auto_schema
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.hashers import make_password
+from django.db.models import Q
 
 # Creating a default user for testing (if you don't already have one)
 default_user, created = User.objects.get_or_create(
     username='testuser',
     defaults={'password': make_password('testpassword')}  # Hashing the password
+
 )
+
+@swagger_auto_schema(
+    method='get',
+    operation_description="Search movies by title",
+    responses={
+        200: openapi.Response(
+            description="Movies matching the search criteria",
+            examples={
+                "application/json": {
+                    "status": "success",
+                    "movies": [
+                        {
+                            "id": 1,
+                            "title": "Movie Title",
+                            "release_date": "2025-02-19",
+                            "poster": "https://example.com/poster.jpg",
+                            "rating": 8.5,
+                            "trailer_url": "https://example.com/trailer.mp4"
+                        }
+                    ]
+                }
+            }
+        )
+    }
+)
+@api_view(['GET'])
+def search_movies_by_title(request):
+    query = request.GET.get('q', None)  # Get the search query from the URL parameter 'q'
+    
+    if query:
+        # Filter movies where the title contains the query (case-insensitive)
+        movies = Movie.objects.filter(Q(title__icontains=query))
+        movies_list = [
+            {
+                "id": movie.id,
+                "title": movie.title,
+                "release_date": movie.release_date.strftime("%Y-%m-%d"),
+                "poster": movie.poster.url if movie.poster else None,
+                "rating": movie.rating,
+                "trailer_url": movie.trailer_url
+            }
+            for movie in movies
+        ]
+        return JsonResponse({"status": "success", "movies": movies_list}, safe=False)
+    else:
+        # If no query, return an empty list
+        return JsonResponse({"status": "success", "movies": []}, safe=False)
+
+
+
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from django.http import JsonResponse
+
+# Assuming group_movies_by_category() is a function that returns categorized movie data
+def group_movies_by_category():
+    return {
+        "Action": [
+            {
+                "id": 1,
+                "title": "Movie Title",
+                "release_date": "2025-02-19",
+                "poster": "https://example.com/poster.jpg",
+                "rating": 8.5,
+                "trailer_url": "https://example.com/trailer.mp4"
+            }
+        ],
+        # More categories (e.g., Romance, Comedy, etc.) can go here
+    }
+
+@swagger_auto_schema(
+    method='get',
+    operation_description="Retrieve movies grouped by category",
+    responses={ 
+        200: openapi.Response(
+            description="Movies grouped by category",
+            examples={ 
+                "application/json": {
+                    "status": "success",
+                    "movies_by_category": {
+                        "Action": [
+                            {
+                                "id": 1,
+                                "title": "Movie Title",
+                                "release_date": "2025-02-19",
+                                "poster": "https://example.com/poster.jpg",
+                                "rating": 8.5,
+                                "movie_detail": {
+                                    "title": "Movie Title",
+                                    "release_date": "2025-02-19",
+                                    "overview": "This is a brief overview of the movie.",
+                                    "poster": "https://example.com/poster.jpg",
+                                    "trailer_url": "https://example.com/trailer.mp4"
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        )
+    }
+)
+@api_view(['GET'])
+def movies_by_category(request, category):
+    # Fetch movies grouped by category
+    categorized_movies = group_movies_by_category()
+
+    if category not in categorized_movies:
+        return JsonResponse({"status": "error", "message": "Category not found"}, status=404)
+
+    movies_in_category = categorized_movies[category]
+    
+    # Format the categorized movies to include 'movie_detail' for each movie
+    result = []
+    for movie in movies_in_category:
+        # Build the movie_detail dictionary
+        movie_detail = {
+            "title": movie['title'],
+            "release_date": movie['release_date'],
+            "overview": movie.get('overview', 'No overview available'),
+            "poster": movie['poster'],
+            "trailer_url": movie['trailer_url']  # Keep trailer_url in movie_detail
+        }
+        
+        # Remove trailer_url from the main movie object
+        movie.pop('trailer_url', None)
+
+        # Add movie_detail to the movie
+        movie['movie_detail'] = movie_detail
+
+        result.append(movie)
+
+    return JsonResponse({
+        "status": "success",
+        "movies_by_category": {category: result}
+    }, safe=False)
+
+
 
 
 @swagger_auto_schema(method='get', operation_summary="Retrieve items")
@@ -59,7 +202,7 @@ def json_view(request):
                 "poster": movie.poster.url if movie.poster else None,
                 "trailer_url": movie.trailer_url
             },
-            "trailer_url": movie.trailer_url
+        
         }
         for movie in movies
     ]
@@ -235,3 +378,22 @@ class RegisterAPI(APIView):
 def register_view(request):
     return render(request, 'movies/register.html')
 
+def group_movies_by_category():
+    categories = {}
+    movies = Movie.objects.all()
+    
+    for movie in movies:
+        for genre in movie.genres.all():  # Assuming a ManyToMany relationship
+            if genre.name not in categories:
+                categories[genre.name] = []
+            
+            categories[genre.name].append({
+                "id": movie.id,
+                "title": movie.title,
+                "release_date": movie.release_date.strftime("%Y-%m-%d"),
+                "poster": movie.poster.url if movie.poster else None,
+                "rating": movie.rating,
+                "trailer_url": movie.trailer_url
+            })
+    
+    return categories
