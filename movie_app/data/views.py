@@ -6,19 +6,29 @@ from .LoginSerializer import LoginSerializer  # Import LoginSerializer
 from .UserSerializer import UserSerializer 
 from django.contrib import messages
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from rest_framework.decorators import authentication_classes, permission_classes
+from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from .LoginSerializer import LoginSerializer, UserSerializer
 from rest_framework import serializers  # ✅ Ensure this is imported
 from .LoginSerializer import LoginSerializer, UserSerializer  # ✅ Import from the correct file
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view,permission_classes
 from drf_yasg import openapi  # This line is necessary for openapi
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from .serializers import WatchlistSerializer
+
+from .serializers import ReviewSerializer
+from .models import Watchlist, Movie
+from .serializers import WatchlistSerializer, MovieSerializer
+
 from django.contrib.auth.models import User
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.hashers import make_password
@@ -31,13 +41,6 @@ default_user, created = User.objects.get_or_create(
 
 )
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from django.http import JsonResponse
-from django.db.models import Q
-from .models import Movie
 
 # Define the Swagger parameters for the search query
 search_query_param = openapi.Parameter(
@@ -72,6 +75,7 @@ search_query_param = openapi.Parameter(
                             "movie_detail": {
                                 "title": "Movie Title",
                                 "release_date": "2025-02-19",
+                                "rating": 8.5,
                                 "overview": "This is a brief overview of the movie.",
                                 "poster": "https://example.com/poster.jpg",
                                 "trailer_url": "https://example.com/trailer.mp4"
@@ -101,6 +105,7 @@ def search_movies_by_title(request):
                     "title": movie.title,
                     "release_date": movie.release_date.strftime("%Y-%m-%d"),
                     "overview": movie.overview if hasattr(movie, 'overview') else "No overview available",
+                    "rating": movie.rating,
                     "poster": movie.poster.url if movie.poster else None,
                     "trailer_url": movie.trailer_url
                 }
@@ -116,15 +121,15 @@ def group_movies_by_category():
     return {
         "Action": [
             {
-                "id": 1,
-                "title": "Movie Title",
-                "release_date": "2025-02-19",
-                "poster": "https://example.com/poster.jpg",
-                "rating": 8.5,
-                "trailer_url": "https://example.com/trailer.mp4"
+                "id": 5,
+                "title": "Creator of the Gods 2",
+                "release_date": "2025-01-29",
+                "poster": "/media/movies/posters/250111_CreationoftheGodsIIDemonForce_big.webp",
+                "rating": 8,
+                "trailer_url": "https://www.youtube.com/watch?v=nbYvqpf7A6M",
+                "overview": "An epic sequel about gods and warriors battling for the fate of the world."  # ✅ ADD OVERVIEW HERE
             }
         ],
-        # More categories (e.g., Romance, Comedy, etc.) can go here
     }
 
 @swagger_auto_schema(
@@ -148,6 +153,7 @@ def group_movies_by_category():
                                     "title": "Movie Title",
                                     "release_date": "2025-02-19",
                                     "overview": "This is a brief overview of the movie.",
+                                    "rating": 8.5,
                                     "poster": "https://example.com/poster.jpg",
                                     "trailer_url": "https://example.com/trailer.mp4"
                                 }
@@ -160,42 +166,38 @@ def group_movies_by_category():
     }
 )
 @api_view(['GET'])
-def movies_by_category(request, category):
-    # Fetch movies grouped by category
-    categorized_movies = group_movies_by_category()
+def search_movies_by_category(request, category):
+    """
+    Retrieves movies filtered by a specific category.
+    """
+    movies = Movie.objects.filter(genres__name__iexact=category)  # Adjust field name if necessary
 
-    if category not in categorized_movies:
+    if not movies.exists():
         return JsonResponse({"status": "error", "message": "Category not found"}, status=404)
 
-    movies_in_category = categorized_movies[category]
-    
-    # Format the categorized movies to include 'movie_detail' for each movie
-    result = []
-    for movie in movies_in_category:
-        # Build the movie_detail dictionary
-        movie_detail = {
-            "title": movie['title'],
-            "release_date": movie['release_date'],
-            "overview": movie.get('overview', 'No overview available'),
-            "poster": movie['poster'],
-            "trailer_url": movie['trailer_url']  # Keep trailer_url in movie_detail
+    movies_list = [
+        {
+            "id": movie.id,
+            "title": movie.title,
+            "release_date": movie.release_date.strftime("%Y-%m-%d"),
+            "poster": movie.poster.url if movie.poster else None,
+            "rating": movie.rating,
+            "movie_detail": {
+                "title": movie.title,
+                "release_date": movie.release_date.strftime("%Y-%m-%d"),
+                "overview": movie.overview if movie.overview and movie.overview.strip() else "No overview available",
+                "rating": movie.rating,
+                "poster": movie.poster.url if movie.poster else None,
+                "trailer_url": movie.trailer_url
+            }
         }
-        
-        # Remove trailer_url from the main movie object
-        movie.pop('trailer_url', None)
-
-        # Add movie_detail to the movie
-        movie['movie_detail'] = movie_detail
-
-        result.append(movie)
+        for movie in movies
+    ]
 
     return JsonResponse({
         "status": "success",
-        "movies_by_category": {category: result}
+        "movies_by_category": {category: movies_list}
     }, safe=False)
-
-
-
 
 @swagger_auto_schema(method='get', operation_summary="Retrieve items")
 @api_view(['GET'])
@@ -222,6 +224,7 @@ def json_view(request):
             "movie_detail": {
                 "title": movie.title,
                 "release_date": movie.release_date.strftime("%Y-%m-%d"),
+                "rating": movie.rating,
                 "overview": movie.overview,
                 "poster": movie.poster.url if movie.poster else None,
                 "trailer_url": movie.trailer_url
@@ -255,34 +258,99 @@ def movie_detail(request, movie_id):
     reviews = movie.reviews.all()
     return render(request, 'movies/movie_detail.html', {'movie': movie, 'reviews': reviews})
 
-@login_required
+@swagger_auto_schema(
+    method='post',
+    operation_description="Add a review for a movie",
+    request_body=ReviewSerializer,
+    responses={201: "Review Created", 400: "Invalid Data"},
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def add_review(request, movie_id):
     movie = get_object_or_404(Movie, id=movie_id)
-    if request.method == 'POST':
-        form = ReviewForm(request.POST)
-        if form.is_valid():
-            review = form.save(commit=False)
-            review.user = request.user
-            review.movie = movie
-            review.save()
-            return redirect('movie_detail', movie_id=movie.id)
-    else:
-        form = ReviewForm()
-    return render(request, 'movies/add_review.html', {'form': form, 'movie': movie})
+    serializer = ReviewSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(user=request.user, movie=movie)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@login_required
+@swagger_auto_schema(
+    methods=['post'],
+    operation_description="Add a movie to the watchlist",
+    responses={201: "Movie added to your watchlist!", 400: "Bad Request"}
+)
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])  # ✅ Use JWT authentication
+@permission_classes([IsAuthenticated])
 def add_to_watchlist(request, movie_id):
+    print(f"User: {request.user}")  
+    print(f"Authenticated: {request.user.is_authenticated}")  
+    print(f"Authorization Header: {request.headers.get('Authorization')}")  
+
+    if not request.user.is_authenticated:
+        return Response({'message': 'Authentication required to add to watchlist.'}, status=status.HTTP_401_UNAUTHORIZED)
+
     movie = get_object_or_404(Movie, id=movie_id)
     watchlist, created = Watchlist.objects.get_or_create(user=request.user, movie=movie)
+
     if not created:
-      messages.info(request, "This movie is already in your watchlist.")
-    return redirect('movie_detail', movie_id=movie.id)
+        return Response({'message': 'This movie is already in your watchlist.'}, status=status.HTTP_200_OK)
+
+    return Response({'message': 'Movie added to your watchlist!'}, status=status.HTTP_201_CREATED)
 
 
-@login_required
+
+@swagger_auto_schema(
+    method='get',
+    operation_description="Retrieve the list of movies in the user's watchlist with detailed information",
+    responses={200: MovieSerializer(many=True)}
+)
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])  # ✅ Ensure JWT is used
+@permission_classes([IsAuthenticated])
 def watchlist(request):
+    """
+    Returns the list of movies with detailed information in the authenticated user's watchlist.
+    """
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({'message': 'Authentication required.'}, status=401)
+
+    # Fetch movies from the user's watchlist
     watchlist_movies = Watchlist.objects.filter(user=request.user)
-    return render(request, 'movies/watchlist.html', {'watchlist_movies': watchlist_movies})
+    
+    # Retrieve movie details based on the movies in the watchlist
+    movies = []
+    for entry in watchlist_movies:
+        movie = Movie.objects.get(id=entry.movie.id)  # Assuming 'movie' is a ForeignKey in Watchlist
+        movie_data = MovieSerializer(movie).data
+        
+        # Create a nested 'movie_detail' field
+        movie_detail = {
+            "title": movie_data['title'],
+            "release_date": movie_data['release_date'],
+            "overview": movie_data['overview'],
+            "rating": movie_data['rating'],
+            "poster": movie_data['poster'],
+            "trailer_url": movie_data['trailer_url']
+        }
+
+        # Append to the movie list with 'movie_detail' nested
+        movies.append({
+            "id": movie_data['id'],
+            "title": movie_data['title'],
+            "release_date": movie_data['release_date'],
+            "poster": movie_data['poster'],
+            "rating": movie_data['rating'],
+            "movie_detail": movie_detail  # Nested movie details
+        })
+
+    # Return the response with movie details
+    return Response({
+        'status': 'success',
+        'movies': movies
+    })
+   
 
 class LoginAPI(APIView):
     permission_classes = []  # Do not require authentication for login
@@ -291,15 +359,14 @@ class LoginAPI(APIView):
     @swagger_auto_schema(
         operation_description="User login endpoint to obtain JWT tokens",
         request_body=LoginSerializer,
-        responses={
-            200: openapi.Response('Login Successful', UserSerializer),
-            400: openapi.Response('Invalid Credentials'),
-            401: openapi.Response('Invalid Login Credentials'),
-        }
+        responses={200: openapi.Response('Login Successful', UserSerializer),
+                   400: openapi.Response('Invalid Credentials'),
+                   401: openapi.Response('Invalid Login Credentials')}
     )
     def post(self, request):
         if not request.data:
-            return Response({"error": "No data received. Ensure Content-Type is application/json."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No data received. Ensure Content-Type is application/json."}, 
+                             status=status.HTTP_400_BAD_REQUEST)
 
         serializer = LoginSerializer(data=request.data)
         
@@ -307,7 +374,6 @@ class LoginAPI(APIView):
             username = serializer.validated_data['username']
             password = serializer.validated_data['password']
             
-            # Authenticate the user with provided credentials
             user = authenticate(username=username, password=password)
             
             if user:
@@ -318,7 +384,7 @@ class LoginAPI(APIView):
                 return Response({
                     'access': access_token,
                     'refresh': str(refresh),  # Return the Refresh Token
-                    'user': UserSerializer(user).data  # Return user info (optional)
+                    'user': UserSerializer(user).data  # This line should include the user's gender
                 }, status=status.HTTP_200_OK)
             
             return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -421,3 +487,24 @@ def group_movies_by_category():
             })
     
     return categories
+
+def movie_data_view(request):
+    movies = Movie.objects.all()
+    serializer = MovieSerializer(movies, many=True)
+    return JsonResponse({'success': True, 'data': serializer.data}, safe=False)
+
+
+@swagger_auto_schema(
+    method='get',
+    operation_description="Retrieve all reviews for a specific movie",
+    responses={200: ReviewSerializer(many=True)},
+)
+@api_view(['GET'])
+def get_reviews_for_movie(request, movie_id):
+    """
+    Retrieves all reviews for a specific movie.
+    """
+    movie = get_object_or_404(Movie, id=movie_id)  # Fetch the movie based on movie_id
+    reviews = Review.objects.filter(movie=movie)  # Get all reviews for this movie
+    serializer = ReviewSerializer(reviews, many=True)  # Serialize reviews
+    return Response(serializer.data, status=status.HTTP_200_OK)

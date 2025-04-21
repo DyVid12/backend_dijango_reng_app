@@ -1,12 +1,13 @@
 from rest_framework import serializers
-from .LoginSerializer import LoginSerializer, UserSerializer
-from django.contrib.auth.models import User
+from .models import CustomUser  # Import the correct model
 
-class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField(required=True)
-    password = serializers.CharField(required=True)
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ['id', 'username', 'email']
+        model = CustomUser  # Use your custom user model
+        fields = ['id', 'username', 'email', 'gender'] 
+
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(write_only=True, required=True)

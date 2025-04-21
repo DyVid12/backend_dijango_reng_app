@@ -3,6 +3,9 @@ from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser, Group, Permission
+from django.db import models
+
 
 class Genre(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -16,21 +19,22 @@ class Movie(models.Model):
     overview = models.TextField()
     poster = models.ImageField(upload_to='movies/posters/', null=True, blank=True)
     rating = models.FloatField(default=0.0)
-    genres = models.ManyToManyField(Genre)
+    genres = models.ManyToManyField('Genre', related_name="movies")
     trailer_url = models.URLField(blank=True, null=True)  # Added trailer URL field
 
     def __str__(self):
         return self.title
 
 class Review(models.Model):
+    movie = models.ForeignKey('Movie', on_delete=models.CASCADE, related_name='reviews')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='reviews')
     rating = models.IntegerField()
     comment = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)  # Add this line if needed
 
     def __str__(self):
-        return f"{self.user.username} - {self.movie.title} ({self.rating}/10)"
+        return f"{self.user.username} - {self.movie.title}"
 
 class Watchlist(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -84,6 +88,21 @@ class CustomRegister(models.Model):
 
     def __str__(self):
         return self.username
+    
+class CustomUser(AbstractUser):
+    email = models.EmailField(unique=True)
+    gender = models.CharField(max_length=10, choices=[('Male', 'Male'), ('Female', 'Female')], default='Male')
 
-
-
+    # Add related_name to resolve the reverse accessor conflict
+    groups = models.ManyToManyField(
+        'auth.Group', 
+        related_name='customuser_set', 
+        blank=True,
+        help_text='The groups this user belongs to.'
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission', 
+        related_name='customuser_set', 
+        blank=True,
+        help_text='Specific permissions for this user.'
+    )
