@@ -2,3 +2,4 @@ google-generativeai
 pymupdf
 gunicorn
 django
+drf_yasg
