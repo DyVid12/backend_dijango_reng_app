@@ -1,0 +1,2 @@
+web: gunicorn rerng_app.wsgi --log-file -
+worker: celery -A rerng_app worker --loglevel=info 
