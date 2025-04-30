@@ -10,7 +10,7 @@ import os
 from django.core.wsgi import get_wsgi_application
 
 # Set the settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_app.movie_app.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_app.settings')
 
 application = get_wsgi_application()
 
